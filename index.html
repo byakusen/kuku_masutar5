@@ -1,0 +1,1206 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>かけ算九九マスター</title>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 紙吹雪用ライブラリ -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.5.1/dist/confetti.browser.min.js"></script>
+    
+    <style>
+        /* ベース設定：ブルー・パープル系の爽やかなデザイン */
+        body { 
+            font-family: 'M PLUS Rounded 1c', sans-serif; 
+            margin: 0; padding: 0; 
+            background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%); /* blue-100 to purple-100 */
+            min-height: 100vh; overflow: hidden;
+            user-select: none; -webkit-tap-highlight-color: transparent;
+            display: flex; flex-direction: column;
+            color: #4c1d95; /* indigo-900 */
+        }
+        /* グラスモーフィズム効果 */
+        .glass { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(12px); border: 2px solid rgba(255, 255, 255, 0.9); box-shadow: 0 8px 32px rgba(99, 102, 241, 0.15); }
+        .hidden { display: none !important; }
+        .btn-active:active { transform: scale(0.96); filter: brightness(1.1); }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+
+        /* アニメーション */
+        @keyframes popIn { 0% { transform: scale(0.9); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+        .fade-in { animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        
+        @keyframes rockShake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-3px) rotate(-3deg); } 75% { transform: translateX(3px) rotate(3deg); } }
+        .animate-shake { animation: rockShake 0.1s linear infinite; }
+        
+        /* ボス出現アニメーション */
+        @keyframes bossAppear { 
+            0% { transform: scale(0) rotate(-10deg); opacity: 0; } 
+            60% { transform: scale(1.2) rotate(5deg); opacity: 1; } 
+            100% { transform: scale(1) rotate(0); opacity: 1; } 
+        }
+        .animate-boss-appear { animation: bossAppear 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+
+        @keyframes bossDamage {
+            0% { transform: translateX(0); filter: brightness(1); }
+            20% { transform: translateX(-10px); filter: brightness(2) sepia(1) hue-rotate(-50deg) saturate(5); }
+            40% { transform: translateX(10px); }
+            60% { transform: translateX(-10px); }
+            80% { transform: translateX(10px); }
+            100% { transform: translateX(0); filter: brightness(1); }
+        }
+        .animate-boss-damage { animation: bossDamage 0.4s linear; }
+
+        @keyframes flashRed {
+            0%, 100% { background-color: transparent; }
+            50% { background-color: rgba(255, 0, 0, 0.3); }
+        }
+        .animate-flash-red { animation: flashRed 0.3s ease-out; }
+
+        .firework-particle { position: absolute; width: 8px; height: 8px; border-radius: 50%; pointer-events: none; z-index: 100; box-shadow: 0 0 6px currentColor; }
+        @keyframes explode { 0% { transform: translate(0, 0) scale(1); opacity: 1; } 100% { transform: translate(var(--dx), var(--dy)) scale(0); opacity: 0; } }
+        
+        .path-hanamaru { stroke-dasharray: 1500; stroke-dashoffset: 1500; animation: drawHanamaru 2s ease-out forwards; }
+        @keyframes drawHanamaru { to { stroke-dashoffset: 0; } }
+
+        /* テンキー配置 */
+        .numpad-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; padding-bottom: 4px; max-width: 400px; margin: 0 auto; width: 100%; }
+        /* OKボタン */
+        .ok-btn-cell { background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: white; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 1.5rem; border-radius: 16px; box-shadow: 0 4px 0 #5b21b6; border: none; }
+        .ok-btn-cell:active { box-shadow: 0 0 0 #5b21b6; transform: translateY(4px); }
+
+        .num-btn { background: rgba(255,255,255,0.95); color: #5b21b6; border-radius: 16px; font-weight: 800; font-size: 1.5rem; box-shadow: 0 4px 0 rgba(124, 58, 237, 0.15); border: 1px solid rgba(255,255,255,0.8); }
+        .num-btn:active { box-shadow: none; transform: translateY(4px); }
+
+        /* 認定証スタイル */
+        .cert-container { 
+            position: relative; 
+            width: 100%; 
+            max-width: 600px; 
+            margin: 0 auto; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1); 
+            border-radius: 8px; 
+            overflow: hidden; 
+            user-select: auto; 
+        }
+        .cert-bg { width: 100%; height: auto; display: block; }
+        
+        .cert-input {
+            position: absolute;
+            background: transparent;
+            border: 1px dashed rgba(0,0,0,0.0);
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+            font-weight: bold;
+            color: #1e1b4b; /* dark indigo */
+            padding: 0 2px;
+            line-height: 1.1;
+            z-index: 10;
+        }
+        .cert-input:focus { 
+            background: rgba(255, 255, 255, 0.15); 
+            border: 2px solid rgba(139, 92, 246, 0.15); 
+            outline: none; 
+            border-radius: 4px;
+        }
+
+        /* 写真エリア */
+        .cert-photo-area {
+            position: absolute;
+            background: #f3f4f6;
+            overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+            border-radius: 4px;
+            border: 2px dashed #a78bfa;
+            z-index: 5;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cert-photo-area:hover { border-color: #7c3aed; background: #ede9fe; }
+        .cert-photo-img { width: 100%; height: 100%; object-fit: cover; }
+        
+        /* ボタン無効状態 */
+        .btn-disabled { opacity: 0.5; pointer-events: none; background: #eee !important; color: #aaa !important; border-color: #ddd !important; box-shadow: none !important; }
+        
+        /* モードボタンアクティブ/非アクティブ */
+        .mode-btn-active { background: #a855f7 !important; color: white !important; border-bottom: 3px solid #7e22ce !important; box-shadow: 0 4px 6px -1px rgba(168, 85, 247, 0.4); }
+        .mode-btn-inactive { color: #6b21a8 !important; background: rgba(255,255,255,0.6); border-bottom: 3px solid transparent !important; }
+        .mode-btn-inactive:hover { background: rgba(255,255,255,0.9); }
+
+        /* 段ボタン */
+        .dan-btn-active { background: #6366f1; color: white; border: 2px solid #4f46e5; transform: scale(1.02); box-shadow: 0 4px 10px rgba(99, 102, 241, 0.4); }
+        .dan-btn-inactive { background: #ffffff; color: #4338ca; border: 1px solid #e0e7ff; }
+
+        /* ボス戦用オーバーレイ */
+        #boss-overlay {
+            background: radial-gradient(circle, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.95) 100%);
+        }
+        
+        /* 重要：テンキーを最前面に持ってくる */
+        .numpad-container { z-index: 100 !important; }
+    </style>
+</head>
+<body class="p-2 flex justify-center items-center">
+
+    <div id="app-root" class="max-w-md mx-auto w-full h-[100dvh] flex flex-col relative transition-transform pb-2">
+        
+        <!-- タブ -->
+        <div class="flex bg-white/50 backdrop-blur-md rounded-full p-1 mb-2 shadow-sm flex-none h-12 items-center border border-white/60">
+            <button id="nav-challenge" onclick="switchTab('challenge')" class="flex-1 h-full rounded-full text-sm font-bold transition-all bg-indigo-500 text-white shadow-md flex items-center justify-center gap-1">
+                <i data-lucide="zap" class="w-4 h-4"></i> チャレンジ
+            </button>
+            <button id="nav-record" onclick="switchTab('record')" class="flex-1 h-full rounded-full text-sm font-bold transition-all text-indigo-600 flex items-center justify-center gap-1 hover:bg-white/40">
+                <i data-lucide="book-open" class="w-4 h-4"></i> きろく
+            </button>
+        </div>
+
+        <!-- 画面1：メニュー -->
+        <div id="scr-menu" class="screen glass rounded-3xl p-3 text-center flex-1 flex flex-col justify-start overflow-y-auto no-scrollbar relative fade-in">
+            
+            <div class="space-y-2 relative flex flex-col h-full min-h-[500px]">
+                <h1 class="text-lg font-black text-indigo-600 flex justify-center items-center gap-2 mt-1 drop-shadow-sm flex-none tracking-tight">
+                    <i data-lucide="calculator" class="w-5 h-5 fill-indigo-100"></i> かけ算九九マスター
+                </h1>
+
+                <!-- 名前入力 -->
+                <div class="bg-indigo-50/80 p-1.5 rounded-xl border border-indigo-100 shadow-inner flex-none">
+                    <input type="text" id="user-name-input" placeholder="おなまえ (例: 2-1 たろう)" 
+                           class="w-full bg-transparent text-center font-bold text-indigo-900 placeholder-indigo-300 outline-none text-base"
+                           oninput="saveName()">
+                </div>
+                
+                <div class="text-left text-xs font-bold text-indigo-400 pl-1 flex-none mt-1">▼ 九九の段をえらんでね</div>
+                
+                <!-- 段ボタンエリア (3列) -->
+                <div id="dan-buttons-area" class="grid grid-cols-3 gap-2 flex-1 content-start w-full max-w-[360px] mx-auto"></div>
+                
+                <!-- モード切替（3択：九九(1->9)/下がり九九(9->1)/ランダム） -->
+                <div class="bg-indigo-50/50 p-1 rounded-xl border border-white flex-none mt-1">
+                    <div class="flex gap-1 items-stretch">
+                        <button id="mode-normal" class="flex-[1.2] py-2.5 rounded-lg font-bold text-[12px] tracking-tighter leading-none transition-all mode-btn-inactive whitespace-nowrap overflow-hidden" onclick="setMode('NORMAL')">
+                            九九（１→９）
+                        </button>
+                        <button id="mode-reverse" class="flex-[1.4] py-2.5 rounded-lg font-bold text-[12px] tracking-tighter leading-none transition-all mode-btn-inactive whitespace-nowrap overflow-hidden" onclick="setMode('REVERSE')">
+                            下がり九九（９→１）
+                        </button>
+                        <button id="mode-random" class="flex-1 py-2.5 rounded-lg font-bold text-[15px] transition-all mode-btn-inactive flex items-center justify-center whitespace-nowrap overflow-hidden" onclick="setMode('RANDOM')">
+                            ランダム
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- スタートボタン -->
+                <button onclick="startGame('stage')" class="flex-none w-full py-3 bg-gradient-to-r from-pink-400 to-rose-400 text-white rounded-xl font-black text-xl shadow-lg btn-active flex items-center justify-center gap-2 border-b-4 border-rose-500 relative top-0 active:top-[4px] active:border-b-0 transition-all mt-1">
+                    <i data-lucide="play" class="w-6 h-6 fill-current"></i> スタート！
+                </button>
+
+                <!-- ニガテボタン（条件付き表示） -->
+                <div id="nigate-area" class="hidden flex-none w-full animate-pulse mt-1">
+                     <button onclick="startGame('nigate')" class="w-full py-2 bg-gradient-to-r from-orange-500 to-red-500 text-white rounded-xl font-black text-base shadow-md btn-active border-b-2 border-red-700 flex items-center justify-center gap-2">
+                        <span class="text-xl">🔥</span> ニガテをこくふく！ <span id="nigate-count" class="text-sm bg-white/20 px-2 rounded-full"></span>
+                    </button>
+                </div>
+
+                <!-- スペシャルボタンエリア -->
+                <div class="space-y-1 pt-1 flex-none pb-4">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button id="btn-sp-15" onclick="startGame('range', '15')" class="py-2 rounded-xl font-bold text-sm shadow-sm border border-gray-200 bg-white text-gray-400 cursor-not-allowed relative h-10 flex items-center justify-center" disabled>
+                            <span class="flex items-center gap-1"><i data-lucide="lock" class="w-4 h-4"></i> 1〜5の段</span>
+                        </button>
+                        <button id="btn-sp-69" onclick="startGame('range', '69')" class="py-2 rounded-xl font-bold text-sm shadow-sm border border-gray-200 bg-white text-gray-400 cursor-not-allowed relative h-10 flex items-center justify-center" disabled>
+                            <span class="flex items-center gap-1"><i data-lucide="lock" class="w-4 h-4"></i> 6〜9の段</span>
+                        </button>
+                    </div>
+                    <div class="relative h-12" id="last-challenge-box">
+                        <!-- ロックレイヤー -->
+                        <div id="rock-layer" class="absolute inset-0 z-20 flex items-center justify-center bg-gradient-to-br from-slate-400 to-slate-500 border-b-4 border-slate-600 rounded-xl shadow-lg cursor-pointer transition-transform" onclick="tryCrumble()">
+                            <div class="text-slate-100 font-black text-[10px] tracking-widest flex flex-col items-center">
+                                <span class="flex items-center gap-1"><i data-lucide="lock" class="w-3 h-3"></i> MASTER SEAL</span>
+                            </div>
+                        </div>
+                        <button id="btn-sp-last" onclick="startGame('last')" class="w-full h-full rounded-xl font-black text-base shadow-md border-2 border-gray-200 bg-white text-gray-400 cursor-not-allowed relative flex items-center justify-center" disabled>
+                            <span class="flex items-center gap-1"><i data-lucide="lock" class="w-4 h-4"></i> 1〜9の段</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 画面2：ゲームプレイ -->
+        <div id="screen-game" class="screen hidden flex-1 flex flex-col min-h-0 space-y-3 fade-in relative">
+            
+            <!-- ボスバトル表示エリア -->
+            <div id="boss-area" class="hidden absolute top-0 left-0 w-full h-full z-30 flex flex-col items-center justify-center pointer-events-none">
+                <div id="boss-container" class="absolute top-8 w-full flex flex-col items-center animate-boss-appear pointer-events-none">
+                    <div id="boss-emoji" class="text-8xl drop-shadow-2xl filter brightness-110 flex justify-center items-center">🐉</div>
+                    <div class="bg-black/60 text-white px-3 py-1 rounded-full text-xs font-bold mt-2 border border-white/30 backdrop-blur-sm" id="boss-name">ラッキーセブン・ドラゴン</div>
+                    <!-- HPバー -->
+                    <div class="w-32 h-4 bg-gray-800/80 rounded-full mt-2 border-2 border-white/30 overflow-hidden relative">
+                        <div id="boss-hp-bar" class="h-full bg-gradient-to-r from-red-500 to-orange-500 transition-all duration-300 w-full"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- タイムバー -->
+            <div class="w-full bg-white/50 rounded-full h-3 overflow-hidden shadow-inner p-0.5 z-20 relative">
+                <div id="time-bar" class="bg-gradient-to-r from-blue-400 to-indigo-500 h-full rounded-full transition-all duration-1000 ease-linear" style="width: 100%"></div>
+            </div>
+            
+            <div class="glass rounded-2xl px-4 py-2 flex justify-between items-center flex-none text-indigo-600 shadow-sm h-14 z-20 relative">
+                <div class="flex items-center gap-2">
+                    <div class="bg-indigo-100 p-1.5 rounded-full"><i data-lucide="timer" class="w-5 h-5"></i></div>
+                    <span id="display-timer" class="text-3xl font-mono font-black tracking-tighter">30</span>
+                </div>
+                <div id="display-count" class="px-3 py-1 bg-white text-indigo-500 rounded-full text-xs font-bold border border-indigo-100 shadow-sm">あと 9 問</div>
+            </div>
+            
+            <!-- 問題表示エリア -->
+            <div id="problem-area" class="glass rounded-3xl flex-1 flex flex-col justify-center items-center text-center shadow-lg relative min-h-0 px-2 py-4 mb-2 z-20 transition-all duration-500">
+                <div class="absolute top-3 left-0 w-full text-center">
+                    <span id="mode-label" class="bg-indigo-50/80 px-4 py-1 rounded-full text-[10px] text-indigo-400 font-bold uppercase tracking-widest border border-indigo-100">Question</span>
+                </div>
+                
+                <div class="flex items-center justify-center gap-1 w-full mt-2">
+                    <span id="q-text" class="text-6xl font-black text-slate-700 shrink-0 drop-shadow-sm tracking-tighter" style="font-family: 'M PLUS Rounded 1c'">5 × 7</span>
+                    <span class="text-4xl text-indigo-200 shrink-0 font-black px-1">＝</span>
+                    <!-- 答えの枠 -->
+                    <div id="a-field" class="min-w-[90px] h-24 border-b-4 border-indigo-300 text-indigo-600 flex items-center justify-center bg-white/60 rounded-xl text-6xl font-black pb-1 shadow-inner animate-pulse transition-all">?</div>
+                </div>
+            </div>
+
+            <!-- テンキー (電話配列) - z-indexを上げて最前面に -->
+            <div class="numpad-container flex-none relative" style="z-index: 100;">
+                <button class="num-btn h-14" onclick="inputNum(1)">1</button>
+                <button class="num-btn h-14" onclick="inputNum(2)">2</button>
+                <button class="num-btn h-14" onclick="inputNum(3)">3</button>
+                
+                <button class="num-btn h-14" onclick="inputNum(4)">4</button>
+                <button class="num-btn h-14" onclick="inputNum(5)">5</button>
+                <button class="num-btn h-14" onclick="inputNum(6)">6</button>
+                
+                <button class="num-btn h-14" onclick="inputNum(7)">7</button>
+                <button class="num-btn h-14" onclick="inputNum(8)">8</button>
+                <button class="num-btn h-14" onclick="inputNum(9)">9</button>
+                
+                <button class="glass h-14 rounded-2xl flex items-center justify-center bg-indigo-50 text-indigo-400 active:bg-indigo-100 active:scale-95 transition-transform" onclick="deleteNum()">
+                    <i data-lucide="delete" class="w-6 h-6"></i>
+                </button>
+                <button class="num-btn h-14" onclick="inputNum(0)">0</button>
+                <button class="ok-btn-cell h-14" onclick="submitAnswer()">OK</button>
+            </div>
+        </div>
+
+        <!-- ボス出現オーバーレイ -->
+        <div id="boss-overlay" class="hidden fixed inset-0 z-50 flex flex-col items-center justify-center text-white pointer-events-none">
+            <div class="text-6xl font-black animate-bounce text-red-500 drop-shadow-md">WARNING!</div>
+            <div class="mt-8 text-9xl animate-pulse flex justify-center items-center" id="overlay-boss-emoji">🐉</div>
+            <div class="mt-4 text-2xl font-bold" id="overlay-boss-name">ラッキーセブン・ドラゴン</div>
+            <div class="mt-2 text-sm bg-red-600 px-4 py-1 rounded-full">あらわれた！</div>
+        </div>
+
+        <!-- 画面3：結果 -->
+        <div id="screen-result" class="screen hidden glass rounded-3xl p-6 text-center flex-1 flex flex-col justify-center items-center relative overflow-hidden fade-in">
+            <div id="fireworks-container" class="absolute inset-0 pointer-events-none z-0"></div>
+            <div id="hanamaru-area" class="flex justify-center items-center w-full h-48 mb-4 z-10 relative drop-shadow-xl"></div>
+            <div class="z-10 relative w-full bg-white/60 p-6 rounded-3xl backdrop-blur-sm border border-white shadow-xl">
+                <h2 id="result-msg" class="text-4xl font-black text-indigo-600 mb-2 tracking-wider"></h2>
+                <p id="result-sub" class="text-sm font-bold text-gray-500 mb-6"></p>
+                <div class="w-full">
+                    <button onclick="backToTitle()" class="w-full py-3 rounded-xl font-black text-xl shadow-lg bg-gradient-to-r from-indigo-500 to-purple-500 text-white btn-active flex items-center justify-center gap-2 border-b-4 border-indigo-700 active:border-b-0 active:translate-y-1">
+                        <i data-lucide="home" class="w-6 h-6"></i> タイトルへもどる
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 画面4：記録 -->
+        <div id="screen-record" class="screen hidden flex-1 flex flex-col min-h-0 space-y-2 fade-in overflow-hidden">
+            <div id="master-badge" class="hidden flex-none text-center py-4 bg-gradient-to-br from-yellow-50 to-white rounded-2xl border-2 border-yellow-200 shadow-sm relative overflow-hidden shrink-0">
+                <div class="absolute top-0 left-0 w-full h-2 bg-yellow-300"></div>
+                <div id="master-svg" class="flex justify-center mb-1 scale-90 h-20 items-center drop-shadow-md"></div>
+                <p class="text-yellow-600 font-black text-xl relative z-10 mt-1">🏆 かけ算九九マスター免許</p>
+                <button onclick="startCertFlow()" class="absolute bottom-3 right-3 bg-yellow-400 text-white text-xs font-bold px-4 py-2 rounded-full shadow-lg hover:bg-yellow-500 z-20 cursor-pointer flex items-center gap-1">
+                    <i data-lucide="award" class="w-3 h-3"></i> つくる
+                </button>
+            </div>
+            
+            <div class="glass p-3 rounded-2xl shadow-sm flex-none">
+                <h3 class="text-xs font-black text-indigo-700 mb-2 flex items-center gap-2 border-b border-indigo-100 pb-1">
+                    <i data-lucide="star" class="w-4 h-4 text-amber-400 fill-current"></i> スペシャルチャレンジ
+                </h3>
+                <div class="grid grid-cols-3 gap-2" id="special-badges-grid"></div>
+            </div>
+            
+            <div class="bg-white/60 rounded-2xl p-3 shadow-md border border-white/50 flex-1 min-h-0 flex flex-col">
+                <div class="overflow-y-auto flex-1 no-scrollbar">
+                    <table class="w-full text-xs text-center border-collapse">
+                        <thead class="sticky top-0 bg-white/95 backdrop-blur-sm z-10 shadow-sm">
+                            <tr class="text-indigo-400 border-b border-indigo-100">
+                                <th class="pb-2 font-bold text-left pl-4 py-2">だん</th>
+                                <th class="pb-2 font-bold text-[10px] py-2">九九</th>
+                                <th class="pb-2 font-bold text-[10px] py-2">下がり</th>
+                                <th class="pb-2 font-bold text-[10px] py-2">ランダム</th>
+                                <th class="pb-2 font-bold text-[10px] py-2">ボス</th>
+                            </tr>
+                        </thead>
+                        <tbody id="record-tbody" class="text-gray-600"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 画面5：認定証作成 -->
+        <div id="screen-cert-maker" class="screen hidden glass rounded-xl p-2 text-center flex-1 flex flex-col justify-start overflow-y-auto no-scrollbar relative">
+            <h2 class="text-lg font-black text-indigo-600 mb-2 flex items-center justify-center gap-2">
+                <i data-lucide="award" class="w-5 h-5 text-amber-500"></i> めんきょしょう
+            </h2>
+            <p class="text-[10px] text-gray-500 mb-2">文字や写真はタップしてかえられます。<br>完成したらスクリーンショットをとってね！</p>
+
+            <!-- 認定証本体 -->
+            <div id="cert-node" class="cert-container relative w-full bg-white rounded shadow-xl overflow-hidden">
+                <img src="https://github.com/byakusen/kakezan_menkyo2/blob/main/kakezan_menkyo2.png?raw=true" class="cert-bg" alt="認定証背景">
+                
+                <!-- 入力フィールド -->
+                <input type="text" id="in-name" value="" placeholder="おなまえ" class="cert-input text-center" 
+                       style="top: 25.15%; left: 17.5%; width: 45%; font-size: 0.65vw;">
+
+                <div id="cert-photo" class="cert-photo-area" onclick="document.getElementById('file-input').click()" 
+                     style="top: 26.8%; left: 5.8%; width: 19%; height: 45%; border-radius: 4px;">
+                    <img id="cert-photo-img" class="w-full h-full object-cover hidden">
+                    <div id="cert-photo-placeholder" class="text-center text-indigo-300">
+                        <i data-lucide="camera" class="w-4 h-4 mx-auto mb-1"></i>
+                        <span class="text-[6px] block leading-tight font-bold">しゃしん</span>
+                    </div>
+                </div>
+
+                <input type="text" id="in-birthday" placeholder="2018.1.1" class="cert-input text-center" 
+                       style="top: 25.3%; left: 71%; width: 25%; font-size: 0.6vw;">
+                
+                <input type="text" id="in-address" placeholder="〇〇県〇〇市" class="cert-input text-left" 
+                       style="top: 32.2%; left: 37.0%; width: 60%; font-size: 0.6vw;">
+                       
+                <input type="text" id="in-school" placeholder="〇〇小学校" class="cert-input text-center" 
+                       style="top: 39.4%; left: 25.4%; width: 35%; font-size: 0.6vw;">
+
+                <input type="text" id="in-grade" value="2" class="cert-input text-center" 
+                       style="top: 37.7%; left: 84.9%; width: 10%; font-size: 1.08vw;">
+            </div>
+
+            <input type="file" id="file-input" accept="image/*" class="hidden" onchange="loadPhoto(event)">
+
+            <button onclick="switchTab('record')" class="mt-4 py-2 px-6 rounded-full bg-gray-400 text-white font-bold text-xs shadow-md btn-active mx-auto block">
+                もどる
+            </button>
+        </div>
+
+    </div>
+
+    <!-- 音源 -->
+    <audio id="se-correct" src="https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3"></audio>
+    <audio id="se-wrong" src="https://assets.mixkit.co/active_storage/sfx/255/255-preview.mp3"></audio>
+    <audio id="se-fanfare" src="https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3"></audio>
+    <audio id="se-crumble" src="https://assets.mixkit.co/active_storage/sfx/2658/2658-preview.mp3"></audio>
+    <!-- ボス出現音 -->
+    <audio id="se-warning" src="https://assets.mixkit.co/active_storage/sfx/2963/2963-preview.mp3"></audio>
+
+    <script>
+        // 1の段〜9の段
+        const STAGES = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+        
+        // ボスデータ
+        const BOSS_INFO = {
+            1: { name: "ユニコーン・ソード", emoji: "🦄", hp: 3, time: 15 },
+            2: { name: "ツイン・ウルフ", emoji: "🐺", hp: 3, time: 15 },
+            3: { name: "トライ・コブラ", emoji: "🐍", hp: 3, time: 15 },
+            4: { name: "アーマー・タートル", emoji: "🐢", hp: 3, time: 15 },
+            5: { name: "スター・ゴーレム", emoji: "🗿", hp: 3, time: 15 },
+            6: { name: "ヘキサ・ビー", emoji: "🐝", hp: 3, time: 15 },
+            7: { name: "ラッキーセブン・ドラゴン", emoji: "🐉", hp: 3, time: 15 },
+            8: { name: "オクト・スパイダー", emoji: "🕷", hp: 3, time: 15 },
+            9: { name: "ナインテイル・フォックス", emoji: "🦊", hp: 3, time: 15 },
+            
+            // スペシャルボス (1-5, 6-9, Last)
+            'range-15': { 
+                name: "ジャイアント・ベア", 
+                emoji: "<img src='https://raw.githubusercontent.com/byakusen/bear/refs/heads/main/bear.png' class='w-40 h-40 object-contain drop-shadow-2xl animate-shake'>", 
+                hp: 4, 
+                time: 20 
+            },
+            'range-69': { 
+                name: "メタル・スコーピオン", 
+                emoji: "<img src='https://raw.githubusercontent.com/byakusen/scorpion/refs/heads/main/scorpion.png' class='w-40 h-40 object-contain drop-shadow-2xl animate-shake'>", 
+                hp: 4, 
+                time: 20 
+            },
+            'last': { 
+                name: "キング・ドラゴン", 
+                emoji: "<img src='https://raw.githubusercontent.com/byakusen/dragon/refs/heads/main/dragon.png' class='w-48 h-48 object-contain drop-shadow-2xl animate-shake'>", 
+                hp: 5, 
+                time: 30 
+            }
+        };
+        
+        let state = {
+            dan: 2, 
+            mode: 'NORMAL', 
+            gameType: 'stage',
+            problems: [], 
+            index: 0, 
+            inputAns: "", 
+            timer: 30, 
+            maxTime: 30,
+            intervalId: null, 
+            currentKey: "", 
+            waitingForCrumble: false,
+            // ボス戦用
+            isBossBattle: false,
+            bossData: null,
+            bossHp: 0,
+            // 追加：入力ブロックフラグ
+            isInputBlocked: false
+        };
+        
+        const STORAGE_KEY_RECORDS = 'kakezan_records_v1';
+        const STORAGE_KEY_NAME = 'kakezan_username';
+        const STORAGE_KEY_VIEW = 'kakezan_view_state';
+        const STORAGE_KEY_CERT = 'kakezan_cert_info_v2';
+        const STORAGE_KEY_NIGATE = 'kakezan_nigate_list_v1';
+        // ボス撃破記録
+        const STORAGE_KEY_BOSS = 'kakezan_boss_cleared_v1';
+
+        let savedRecords = JSON.parse(localStorage.getItem(STORAGE_KEY_RECORDS)) || {};
+        let savedName = localStorage.getItem(STORAGE_KEY_NAME) || "";
+        let savedNigate = JSON.parse(localStorage.getItem(STORAGE_KEY_NIGATE)) || [];
+        let savedBoss = JSON.parse(localStorage.getItem(STORAGE_KEY_BOSS)) || {};
+
+        window.onload = () => {
+            lucide.createIcons();
+            document.getElementById('user-name-input').value = savedName;
+            loadCertInfo();
+            renderMenu();
+            renderRecords();
+            
+            const lastView = localStorage.getItem(STORAGE_KEY_VIEW);
+            if (lastView === 'cert-maker') {
+                switchTab('record', false);
+                startCertFlow();
+            } else if (lastView === 'record') {
+                switchTab('record');
+            } else {
+                switchTab('challenge');
+            }
+
+            ['in-name', 'in-school', 'in-grade', 'in-address', 'in-birthday'].forEach(id => {
+                document.getElementById(id).addEventListener('input', saveCertInfo);
+            });
+        };
+
+        function saveName() {
+            const val = document.getElementById('user-name-input').value;
+            localStorage.setItem(STORAGE_KEY_NAME, val);
+        }
+        function saveViewState(view) { localStorage.setItem(STORAGE_KEY_VIEW, view); }
+        function saveCertInfo() {
+            const info = {
+                name: document.getElementById('in-name').value,
+                school: document.getElementById('in-school').value,
+                grade: document.getElementById('in-grade').value,
+                address: document.getElementById('in-address').value,
+                birthday: document.getElementById('in-birthday').value,
+            };
+            localStorage.setItem(STORAGE_KEY_CERT, JSON.stringify(info));
+        }
+        function loadCertInfo() {
+            const infoStr = localStorage.getItem(STORAGE_KEY_CERT);
+            const menuName = localStorage.getItem(STORAGE_KEY_NAME) || ""; 
+            if (infoStr) {
+                const info = JSON.parse(infoStr);
+                document.getElementById('in-name').value = info.name || menuName;
+                document.getElementById('in-school').value = info.school || "";
+                document.getElementById('in-grade').value = info.grade || "2";
+                document.getElementById('in-address').value = info.address || "";
+                document.getElementById('in-birthday').value = info.birthday || "";
+            } else {
+                document.getElementById('in-name').value = menuName;
+            }
+        }
+        function startCertFlow() {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById('screen-cert-maker').classList.remove('hidden');
+            saveViewState('cert-maker');
+            const menuName = document.getElementById('user-name-input').value;
+            if (menuName) {
+                document.getElementById('in-name').value = menuName;
+                saveCertInfo();
+            }
+            lucide.createIcons();
+        }
+        function loadPhoto(event) {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const img = document.getElementById('cert-photo-img');
+                    img.src = e.target.result;
+                    img.classList.remove('hidden');
+                    document.getElementById('cert-photo-placeholder').classList.add('hidden');
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+        function switchTab(tabName, shouldSave = true) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            const btnGame = document.getElementById('nav-challenge');
+            const btnRec = document.getElementById('nav-record');
+            const inactiveClass = "flex-1 h-full rounded-full text-sm font-bold transition-all text-indigo-600 flex items-center justify-center gap-1 hover:bg-white/30";
+            const activeClass = "flex-1 h-full rounded-full text-sm font-bold transition-all bg-indigo-500 text-white shadow-md flex items-center justify-center gap-1";
+            btnGame.className = inactiveClass;
+            btnRec.className = inactiveClass;
+            if (tabName === 'challenge') {
+                document.getElementById('scr-menu').classList.remove('hidden');
+                btnGame.className = activeClass;
+                if (state.waitingForCrumble) {
+                    state.waitingForCrumble = false;
+                    checkUnlockAndCrumble();
+                } else { renderMenu(); }
+            } else {
+                document.getElementById('screen-record').classList.remove('hidden');
+                renderRecords();
+                btnRec.className = activeClass;
+            }
+            if(shouldSave) saveViewState(tabName);
+        }
+        function backToTitle() {
+            document.querySelectorAll('.confetti').forEach(c => c.remove());
+            // ボスエリアリセット
+            document.getElementById('boss-area').classList.add('hidden');
+            document.getElementById('boss-overlay').classList.add('hidden');
+            
+            // 画面スタイルリセット
+            const pArea = document.getElementById('problem-area');
+            pArea.classList.remove('bg-white/20', 'backdrop-blur-none', 'border-red-400', 'border-4');
+            pArea.classList.add('glass');
+            
+            state.isInputBlocked = false; // ブロック解除
+            switchTab('challenge');
+        }
+        function retryGame() {
+            document.querySelectorAll('.confetti').forEach(c => c.remove());
+            document.getElementById('boss-area').classList.add('hidden');
+            
+            // 画面スタイルリセット
+            const pArea = document.getElementById('problem-area');
+            pArea.classList.remove('bg-white/20', 'backdrop-blur-none', 'border-red-400', 'border-4');
+            pArea.classList.add('glass');
+            
+            state.isInputBlocked = false; // ブロック解除
+            // 通常のリトライ
+            startGame(state.gameType, state.currentKey.split('-')[1]);
+        }
+        function setMode(mode) {
+            state.mode = mode;
+            updateModeButtons();
+        }
+        function updateModeButtons() {
+            const btnNormal = document.getElementById('mode-normal');
+            const btnReverse = document.getElementById('mode-reverse');
+            const btnRandom = document.getElementById('mode-random');
+            const common = "rounded-lg font-bold transition-all";
+            const active = "mode-btn-active";
+            const inactive = "mode-btn-inactive";
+            btnNormal.className = `flex-[1.2] py-2.5 ${common} text-[12px] tracking-tighter leading-none ` + (state.mode === 'NORMAL' ? active : inactive);
+            btnReverse.className = `flex-[1.4] py-2.5 ${common} text-[12px] tracking-tighter leading-none ` + (state.mode === 'REVERSE' ? active : inactive);
+            btnRandom.className = `flex-1 py-2.5 ${common} text-[15px] flex items-center justify-center ` + (state.mode === 'RANDOM' ? active : inactive);
+        }
+        function setDan(dan) {
+            state.dan = dan;
+            renderMenu();
+        }
+        function renderMenu() {
+            const container = document.getElementById('dan-buttons-area');
+            container.innerHTML = "";
+            STAGES.forEach(d => {
+                const btn = document.createElement('button');
+                btn.innerHTML = `<span class="font-bold text-lg">${d}の段</span>`;
+                if (state.dan === d) {
+                    btn.className = "h-14 rounded-xl text-lg dan-btn-active transition-all flex items-center justify-center";
+                } else {
+                    btn.className = "h-14 rounded-xl text-lg dan-btn-inactive hover:bg-indigo-50 transition-all flex items-center justify-center shadow-sm";
+                }
+                btn.onclick = () => setDan(d);
+                container.appendChild(btn);
+            });
+            const is15Clear = [1,2,3,4,5].every(d => savedRecords[`stage-${d}-RANDOM`]);
+            const is69Clear = [6,7,8,9].every(d => savedRecords[`stage-${d}-RANDOM`]);
+            const isLastClear = savedRecords['range-15'] && savedRecords['range-69'];
+            updateSpBtn('btn-sp-15', is15Clear, '1〜5の段', 'yellow');
+            updateSpBtn('btn-sp-69', is69Clear, '6〜9の段', 'yellow');
+            const lastBtn = document.getElementById('btn-sp-last');
+            const rock = document.getElementById('rock-layer');
+            if (isLastClear && !state.waitingForCrumble) {
+                lastBtn.disabled = false;
+                lastBtn.className = "w-full h-full rounded-xl font-black text-base shadow-md bg-gradient-to-r from-amber-400 to-orange-500 text-white btn-active relative z-30 flex items-center justify-center gap-2";
+                lastBtn.innerHTML = `<i data-lucide="crown" class="w-5 h-5 fill-white"></i> 1〜9の段`;
+                if(rock) rock.classList.add('hidden');
+            } else {
+                lastBtn.disabled = true;
+                if(rock) rock.classList.remove('hidden');
+            }
+            const nigateArea = document.getElementById('nigate-area');
+            if (savedNigate.length > 0) {
+                nigateArea.classList.remove('hidden');
+                document.getElementById('nigate-count').innerText = `あと ${savedNigate.length} 問`;
+            } else {
+                nigateArea.classList.add('hidden');
+            }
+            lucide.createIcons();
+            updateModeButtons();
+        }
+        function updateSpBtn(id, unlocked, text, color) {
+            const btn = document.getElementById(id);
+            if (unlocked) {
+                btn.disabled = false;
+                btn.className = "py-2 rounded-xl font-bold text-sm shadow-md border-b-2 border-amber-300 bg-amber-50 text-amber-600 btn-active relative h-10 flex items-center justify-center";
+                btn.innerHTML = `<span class="flex items-center gap-1"><i data-lucide="star" class="w-4 h-4 fill-amber-400 text-amber-400"></i> ${text}</span>`;
+            } else {
+                btn.disabled = true;
+                btn.className = "py-2 rounded-xl font-bold text-sm shadow-sm border border-gray-200 bg-white text-gray-400 cursor-not-allowed relative h-10 flex items-center justify-center";
+                btn.innerHTML = `<span class="flex items-center gap-1"><i data-lucide="lock" class="w-4 h-4"></i> ${text}</span>`;
+            }
+        }
+
+        function startGame(type, val) {
+            state.gameType = type;
+            state.inputAns = "";
+            state.isBossBattle = false; // 初期化
+            state.isInputBlocked = false; // ブロック解除
+            
+            // 安全策：開始時にボス関連のオーバーレイを確実に消す
+            document.getElementById('boss-overlay').classList.add('hidden');
+            document.getElementById('boss-area').classList.add('hidden');
+            
+            let time = 30;
+            let list = [];
+            let key = "";
+            
+            if (type === 'stage') {
+                const d = state.dan;
+                list = generateKukuProblems(d, state.mode);
+                key = `stage-${d}-${state.mode}`;
+                time = 30; 
+            } else if (type === 'range') {
+                const range = val === '15' ? [1,2,3,4,5] : [6,7,8,9];
+                list = generateRandomProblemsFromRange(range, 20);
+                time = 60;
+                key = `range-${val}`;
+            } else if (type === 'last') {
+                const range = [1,2,3,4,5,6,7,8,9];
+                list = generateRandomProblemsFromRange(range, 30);
+                time = 90;
+                key = `last-challenge`;
+            } else if (type === 'nigate') {
+                list = shuffleArray([...savedNigate]).slice(0, 10);
+                time = 60;
+                key = 'nigate-training';
+            }
+            
+            state.problems = list;
+            state.index = 0;
+            state.timer = time;
+            state.maxTime = time;
+            state.currentKey = key;
+            
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            document.getElementById('screen-game').classList.remove('hidden');
+            
+            // 画面スタイルリセット
+            const pArea = document.getElementById('problem-area');
+            pArea.classList.remove('bg-white/20', 'backdrop-blur-none', 'border-red-400', 'border-4');
+            pArea.classList.add('glass');
+
+            updateDisplay();
+            
+            if (state.intervalId) clearInterval(state.intervalId);
+            state.intervalId = setInterval(() => {
+                if (state.isInputBlocked) return; // ブロック中は時間も減らさない？いや、時間は減らす
+                state.timer--;
+                const timerEl = document.getElementById('display-timer');
+                const barEl = document.getElementById('time-bar');
+                timerEl.innerText = state.timer;
+                const pct = (state.timer / state.maxTime) * 100;
+                barEl.style.width = pct + '%';
+                
+                if (state.timer <= 10) {
+                    timerEl.classList.add('text-rose-600');
+                    barEl.className = 'h-full rounded-full transition-all duration-1000 ease-linear bg-rose-500';
+                } else {
+                    timerEl.classList.remove('text-rose-600');
+                    barEl.className = 'h-full rounded-full transition-all duration-1000 ease-linear bg-gradient-to-r from-blue-400 to-indigo-500';
+                }
+                
+                if (state.timer <= 0) {
+                    if (state.isBossBattle) {
+                        playAudio('se-wrong');
+                        finishGame(false);
+                    } else {
+                        finishGame(false);
+                    }
+                }
+            }, 1000);
+            
+            lucide.createIcons();
+        }
+
+        function generateKukuProblems(dan, mode) {
+            let candidates = [];
+            for (let i = 1; i <= 9; i++) {
+                candidates.push({ q: `${dan} × ${i}`, a: dan * i });
+            }
+            if (mode === 'REVERSE') { candidates.reverse(); }
+            else if (mode === 'RANDOM') { shuffleArray(candidates); }
+            return candidates;
+        }
+
+        function generateRandomProblemsFromRange(danList, count) {
+            let candidates = [];
+            danList.forEach(d => { for(let i=1; i<=9; i++) { candidates.push({ q: `${d} × ${i}`, a: d * i }); } });
+            let result = [];
+            let lastQ = "";
+            for(let i=0; i<count; i++) {
+                let r;
+                let attempts = 0;
+                do {
+                    r = candidates[Math.floor(Math.random() * candidates.length)];
+                    attempts++;
+                } while (r.q === lastQ && attempts < 10 && candidates.length > 1);
+                result.push(r);
+                lastQ = r.q;
+            }
+            return result;
+        }
+        function shuffleArray(array) {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+        function updateDisplay() {
+            if (!state.problems[state.index]) return; // 安全対策
+
+            const p = state.problems[state.index];
+            document.getElementById('q-text').innerText = p.q;
+            const aField = document.getElementById('a-field');
+            if (state.inputAns === "") {
+                aField.innerText = "?";
+                aField.classList.add('text-indigo-200');
+                aField.classList.remove('text-indigo-600');
+            } else {
+                aField.innerText = state.inputAns;
+                aField.classList.remove('text-indigo-200');
+                aField.classList.add('text-indigo-600');
+            }
+            
+            const modeLabel = document.getElementById('mode-label');
+
+            if (state.isBossBattle) {
+                document.getElementById('display-count').innerText = `あと ${state.problems.length - state.index} 回せいかいしろ！`;
+                // ボス戦時はラベルを非表示にする
+                modeLabel.classList.add('hidden');
+            } else {
+                document.getElementById('display-count').innerText = `あと ${state.problems.length - state.index} 問`;
+                modeLabel.classList.remove('hidden');
+                modeLabel.innerText = "QUESTION";
+                modeLabel.className = "bg-indigo-50/80 px-4 py-1 rounded-full text-[10px] text-indigo-400 font-bold uppercase tracking-widest border border-indigo-100";
+            }
+        }
+        function inputNum(num) {
+            if (state.isInputBlocked) return; // ブロック中は無視
+            if (state.inputAns.length >= 2) return;
+            state.inputAns += num.toString();
+            updateDisplay();
+        }
+        function deleteNum() {
+            if (state.isInputBlocked) return; // ブロック中は無視
+            state.inputAns = state.inputAns.slice(0, -1);
+            updateDisplay();
+        }
+        function submitAnswer() {
+            if (state.isInputBlocked) return; // ブロック中は無視
+            if (state.inputAns === "") return;
+            
+            // 安全対策：インデックス範囲外なら無視
+            if (state.index >= state.problems.length) return;
+
+            const p = state.problems[state.index];
+            const ans = parseInt(state.inputAns);
+            
+            if (ans === p.a) {
+                playAudio('se-correct');
+                if (state.gameType === 'nigate') { removeFromNigate(p); }
+                
+                state.index++;
+                state.inputAns = "";
+                
+                if (state.isBossBattle) {
+                    const bossEmoji = document.getElementById('boss-emoji');
+                    bossEmoji.classList.remove('animate-boss-appear');
+                    void bossEmoji.offsetWidth; // trigger reflow
+                    bossEmoji.classList.add('animate-boss-damage');
+                    
+                    state.bossHp--;
+                    const hpPercent = (state.bossHp / state.bossMaxHp) * 100;
+                    document.getElementById('boss-hp-bar').style.width = hpPercent + '%';
+
+                    if (state.index >= state.problems.length) {
+                        finishGame(true);
+                    } else {
+                        updateDisplay();
+                    }
+                } else {
+                    if (state.index >= state.problems.length) {
+                        // 通常のランダムボス、またはスペシャルステージのボス出現判定
+                        let bossId = null;
+                        if (state.gameType === 'stage' && state.mode === 'RANDOM') {
+                            bossId = state.dan;
+                        } else if (state.gameType === 'range' && state.currentKey === 'range-15') {
+                            bossId = 'range-15';
+                        } else if (state.gameType === 'range' && state.currentKey === 'range-69') {
+                            bossId = 'range-69';
+                        } else if (state.gameType === 'last') {
+                            bossId = 'last';
+                        }
+
+                        if (bossId && BOSS_INFO[bossId]) {
+                             startBossEncounter(bossId);
+                        } else {
+                             finishGame(true);
+                        }
+                    } else {
+                        updateDisplay();
+                    }
+                }
+            } else {
+                playAudio('se-wrong');
+                if (state.gameType !== 'nigate' && !state.isBossBattle) { addToNigate(p); }
+                
+                if (state.isBossBattle) {
+                     document.getElementById('screen-game').classList.add('animate-flash-red');
+                     // バグ防止：点滅中は操作ブロック
+                     state.isInputBlocked = true;
+                     setTimeout(()=>{
+                        state.isInputBlocked = false; // 0.5秒後に解除
+                        finishGame(false);
+                     }, 500);
+                } else {
+                     finishGame(false);
+                }
+            }
+        }
+
+        function startBossEncounter(bossId) {
+            clearInterval(state.intervalId);
+            state.isInputBlocked = true; // ★重要：ボス演出中は操作ブロック
+
+            const boss = BOSS_INFO[bossId];
+            state.bossData = boss;
+            // state.isBossBattle = true; // ★修正：ここではまだバトルモードにしない
+            state.bossHp = boss.hp;
+            state.bossMaxHp = boss.hp;
+            
+            // ★位置調整ロジックを追加★
+            const bossContainer = document.getElementById('boss-container');
+            // クラスをリセット
+            bossContainer.classList.remove('top-8', 'top-1');
+            
+            // スペシャルボス（IDが文字列）の場合は画像を大きく表示しているため、
+            // 問題とかぶらないように少し上に配置する (top-1)
+            // 通常ボス（IDが数値）の場合は元の位置 (top-8)
+            if (typeof bossId === 'string') {
+                bossContainer.classList.add('top-1');
+            } else {
+                bossContainer.classList.add('top-8');
+            }
+
+            const overlay = document.getElementById('boss-overlay');
+            document.getElementById('overlay-boss-emoji').innerHTML = boss.emoji; // innerHTMLに変更（画像対応のため）
+            document.getElementById('overlay-boss-name').innerText = boss.name;
+            overlay.classList.remove('hidden');
+            playAudio('se-warning');
+            
+            // アニメーションリセット用
+            bossContainer.classList.remove('animate-boss-appear');
+            void bossContainer.offsetWidth; // trigger reflow
+            bossContainer.classList.add('animate-boss-appear');
+            
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+                startBossBattle(boss);
+            }, 3000);
+        }
+
+        function startBossBattle(boss) {
+            state.isBossBattle = true; // ★修正：ここでバトルモードON
+            
+            // ★修正：重複しないように問題を生成
+            const nums = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            shuffleArray(nums); // 既存のシャッフル関数を利用
+
+            const problems = [];
+            // スペシャルボス用（15や69やlast）の問題生成ロジック
+            let danList = [];
+            if (state.gameType === 'range' && state.currentKey === 'range-15') {
+                danList = [1, 2, 3, 4, 5];
+            } else if (state.gameType === 'range' && state.currentKey === 'range-69') {
+                danList = [6, 7, 8, 9];
+            } else if (state.gameType === 'last') {
+                danList = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+            } else {
+                danList = [state.dan];
+            }
+
+            for(let i=0; i<boss.hp; i++) {
+                // シャッフルした配列から順番に取り出すことで重複回避（9問以上は出ない前提）
+                // 複数の段がある場合はランダムな段を選ぶ
+                const d = danList[Math.floor(Math.random() * danList.length)];
+                const num = nums[i % nums.length]; 
+                problems.push({ q: `${d} × ${num}`, a: d * num });
+            }
+            state.problems = problems;
+            state.index = 0;
+            state.inputAns = "";
+            state.timer = boss.time;
+            state.maxTime = boss.time;
+            
+            state.isInputBlocked = false; // ★重要：操作ブロック解除
+
+            document.getElementById('boss-area').classList.remove('hidden');
+            document.getElementById('boss-emoji').innerHTML = boss.emoji; // innerHTMLに変更
+            document.getElementById('boss-name').innerText = boss.name;
+            document.getElementById('boss-hp-bar').style.width = '100%';
+            
+            // 透過スタイル適用
+            const pArea = document.getElementById('problem-area');
+            pArea.classList.remove('glass');
+            pArea.classList.add('bg-white/20', 'backdrop-blur-none', 'border-red-400', 'border-4');
+            
+            updateDisplay();
+            
+            state.intervalId = setInterval(() => {
+                state.timer--;
+                const timerEl = document.getElementById('display-timer');
+                const barEl = document.getElementById('time-bar');
+                timerEl.innerText = state.timer;
+                const pct = (state.timer / state.maxTime) * 100;
+                barEl.style.width = pct + '%';
+                
+                if (state.timer <= 5) {
+                     timerEl.classList.add('text-red-600', 'animate-ping');
+                } else {
+                     timerEl.classList.remove('text-red-600', 'animate-ping');
+                }
+                
+                if (state.timer <= 0) {
+                    playAudio('se-wrong');
+                    finishGame(false);
+                }
+            }, 1000);
+        }
+
+        function addToNigate(prob) {
+            const exists = savedNigate.some(p => p.q === prob.q);
+            if (!exists) {
+                savedNigate.push(prob);
+                if (savedNigate.length > 100) savedNigate.shift();
+                localStorage.setItem(STORAGE_KEY_NIGATE, JSON.stringify(savedNigate));
+            }
+        }
+        function removeFromNigate(prob) {
+            savedNigate = savedNigate.filter(p => p.q !== prob.q);
+            localStorage.setItem(STORAGE_KEY_NIGATE, JSON.stringify(savedNigate));
+        }
+
+        function finishGame(isWin) {
+            clearInterval(state.intervalId);
+            state.isInputBlocked = false; // 終了時は念のためブロック解除
+
+            const resScreen = document.getElementById('screen-result');
+            const msg = document.getElementById('result-msg');
+            const sub = document.getElementById('result-sub');
+            const svgBox = document.getElementById('hanamaru-area');
+            
+            document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
+            resScreen.classList.remove('hidden');
+            
+            if (isWin) {
+                if (state.isBossBattle) {
+                    msg.innerText = "ボス撃破！";
+                    sub.innerText = `${state.bossData.name} をたおした！`;
+                    svgBox.innerHTML = createHanamaruSVG(200, "完全制覇");
+                    playAudio('se-fanfare');
+                    launchFireworks();
+                    // スペシャルステージの場合は個別のクリア記録とは別扱い（今回は簡易的に保存しない、あるいは必要ならキーを追加）
+                    if (typeof state.dan === 'number') {
+                        savedBoss[state.dan] = true;
+                        localStorage.setItem(STORAGE_KEY_BOSS, JSON.stringify(savedBoss));
+                    }
+                    savedRecords[state.currentKey] = true;
+                    localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(savedRecords));
+                } else if (state.gameType === 'nigate') {
+                    if (savedNigate.length === 0) {
+                        msg.innerText = "ニガテこくふく！";
+                        sub.innerText = "ぜんぶクリアしたよ！すごい！";
+                    } else {
+                        msg.innerText = "とっくんクリア！";
+                        sub.innerText = `のこり ${savedNigate.length} もん！がんばれ！`;
+                    }
+                    svgBox.innerHTML = createHanamaruSVG(200, "努力賞");
+                    launchFireworks();
+                } else {
+                    msg.innerText = "クリア！";
+                    sub.innerText = "すごい！ぜんもんせいかい！";
+                    
+                    const wasLocked = !(savedRecords['range-15'] && savedRecords['range-69']);
+                    savedRecords[state.currentKey] = true;
+                    localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(savedRecords));
+                    
+                    const isNowUnlocked = savedRecords['range-15'] && savedRecords['range-69'];
+                    if (wasLocked && isNowUnlocked) state.waitingForCrumble = true;
+                    
+                    const lbl = (state.currentKey === 'last-challenge') ? "免許皆伝" : "ごうかく";
+                    svgBox.innerHTML = createHanamaruSVG(200, lbl);
+                    if (state.currentKey === 'last-challenge') {
+                        playAudio('se-fanfare');
+                        launchFireworks(); 
+                    } else {
+                        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: ['#6366f1', '#a855f7', '#ec4899'] });
+                    }
+                }
+            } else {
+                if (state.isBossBattle) {
+                     msg.innerText = "にげられた...";
+                     sub.innerText = "ボスをたおせなかった... またこんど！";
+                     savedRecords[state.currentKey] = true;
+                     localStorage.setItem(STORAGE_KEY_RECORDS, JSON.stringify(savedRecords));
+                } else {
+                     msg.innerText = "おしまい";
+                     sub.innerText = "まちがえちゃった... もういちど！";
+                }
+                svgBox.innerHTML = `<div class="bg-gray-100 p-8 rounded-full shadow-inner"><i data-lucide="x-circle" class="w-20 h-20 text-gray-300"></i></div>`;
+                lucide.createIcons();
+            }
+        }
+        
+        function createHanamaruSVG(size, label) {
+            return `
+            <svg width="${size}" height="${size}" viewBox="0 0 200 200" class="drop-shadow-lg">
+                <path class="path-hanamaru" d="M100,20 C110,5 140,5 150,25 C175,20 195,40 190,65 C210,75 210,105 190,115 C195,140 175,160 150,155 C140,180 110,180 100,160 C90,180 60,180 50,155 C25,160 5,140 10,115 C-10,105 -10,75 10,65 C5,40 25,20 50,25 C60,5 90,5 100,20" fill="none" stroke="#ef4444" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+                <circle class="path-hanamaru" cx="100" cy="90" r="55" fill="none" stroke="#ef4444" stroke-width="5" />
+                <text x="100" y="102" text-anchor="middle" fill="#ef4444" font-weight="900" font-size="28" style="font-family: 'M PLUS Rounded 1c'">${label}</text>
+            </svg>`;
+        }
+
+        function launchFireworks() {
+             var duration = 3000;
+             var animationEnd = Date.now() + duration;
+             var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 0 };
+             var interval = setInterval(function() {
+                 var timeLeft = animationEnd - Date.now();
+                 if (timeLeft <= 0) { return clearInterval(interval); }
+                 var particleCount = 50 * (timeLeft / duration);
+                 confetti(Object.assign({}, defaults, { particleCount, origin: { x: Math.random() * 0.4 + 0.1, y: Math.random() - 0.2 } }));
+                 confetti(Object.assign({}, defaults, { particleCount, origin: { x: Math.random() * 0.4 + 0.5, y: Math.random() - 0.2 } }));
+             }, 250);
+        }
+
+        function renderRecords() {
+            const badgeGrid = document.getElementById('special-badges-grid');
+            badgeGrid.innerHTML = "";
+            [['range-15', '1〜5まとめ'], ['range-69', '6〜9まとめ'], ['last-challenge', '全問制覇']].forEach(([k, n]) => {
+                const ok = savedRecords[k];
+                const d = document.createElement('div');
+                d.className = `p-2 rounded-xl flex flex-col items-center justify-center gap-1 ${ok ? 'bg-amber-100 text-amber-600 border-2 border-amber-200 shadow-sm' : 'bg-gray-50 text-gray-300 border border-gray-200'}`;
+                d.innerHTML = `<i data-lucide="trophy" class="w-5 h-5 ${ok?'fill-amber-400 text-amber-500':''}"></i><span class="text-[10px] font-bold leading-tight">${n}</span>`;
+                badgeGrid.appendChild(d);
+            });
+
+            const tbody = document.getElementById('record-tbody');
+            tbody.innerHTML = "";
+            for(let d=1; d<=9; d++){
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-indigo-50 hover:bg-indigo-50/50 transition-colors";
+                let h = `<td class="text-left pl-4 font-bold text-indigo-900 py-2 text-sm">${d}の段</td>`;
+                ['NORMAL', 'REVERSE', 'RANDOM'].forEach(m => {
+                    const ok = savedRecords[`stage-${d}-${m}`];
+                    h += `<td class="text-center py-2"><div class="w-5 h-5 mx-auto rounded-full flex items-center justify-center ${ok ? 'bg-indigo-500 text-white shadow-sm' : 'bg-gray-100'}"><i data-lucide="check" class="w-3 h-3 ${ok?'':'hidden'}"></i></div></td>`;
+                });
+                // ボス撃破マーク
+                const bossKilled = savedBoss[d];
+                h += `<td class="text-center py-2"><div class="w-5 h-5 mx-auto rounded-full flex items-center justify-center ${bossKilled ? 'bg-amber-400 text-white shadow-sm' : 'bg-gray-100'}"><i data-lucide="crown" class="w-3 h-3 ${bossKilled?'':'hidden'}"></i></div></td>`;
+                tr.innerHTML = h;
+                tbody.appendChild(tr);
+            }
+
+            if(savedRecords['last-challenge']) {
+                document.getElementById('master-badge').classList.remove('hidden');
+                document.getElementById('master-svg').innerHTML = createHanamaruSVG(120, "神");
+            }
+            lucide.createIcons();
+        }
+
+        // --- 追加: エラー修正用ユーティリティ関数 ---
+
+        function playAudio(id) {
+            const audio = document.getElementById(id);
+            if (audio) {
+                audio.currentTime = 0;
+                audio.play().catch(e => console.log('Audio error:', e));
+            }
+        }
+
+        function tryCrumble() {
+            const is15Clear = [1,2,3,4,5].every(d => savedRecords[`stage-${d}-RANDOM`]);
+            const is69Clear = [6,7,8,9].every(d => savedRecords[`stage-${d}-RANDOM`]);
+            
+            const rock = document.getElementById('rock-layer');
+            if (is15Clear && is69Clear) {
+                playAudio('se-crumble');
+                if(rock) {
+                    rock.style.transition = "transform 0.5s, opacity 0.5s";
+                    rock.style.transform = "scale(1.5) rotate(10deg)";
+                    rock.style.opacity = "0";
+                    setTimeout(() => {
+                        rock.classList.add('hidden');
+                        renderMenu();
+                    }, 500);
+                }
+            } else {
+                playAudio('se-wrong');
+                if(rock) {
+                    rock.classList.add('animate-shake');
+                    setTimeout(() => rock.classList.remove('animate-shake'), 500);
+                }
+            }
+        }
+
+        function checkUnlockAndCrumble() {
+             const rock = document.getElementById('rock-layer');
+             if(rock && !rock.classList.contains('hidden')) {
+                 playAudio('se-crumble');
+                 rock.style.transition = "transform 0.5s, opacity 0.5s";
+                 rock.style.transform = "scale(1.5) rotate(10deg)";
+                 rock.style.opacity = "0";
+                 setTimeout(() => {
+                     rock.classList.add('hidden');
+                     renderMenu();
+                     rock.style.transform = ""; 
+                     rock.style.opacity = "";
+                 }, 500);
+             } else {
+                 renderMenu();
+             }
+        }
+
+    </script>
+</body>
+</html>
